@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8"> 
+    <title>ESP32 AI Chat</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .chat-container {
+            background-color: white;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            padding: 20px;
+            margin-bottom: 20px;
+            height: 400px;
+            overflow-y: auto;
+        }
+        .message {
+            margin-bottom: 15px;
+            padding: 10px;
+            border-radius: 5px;
+            max-width: 80%;
+        }
+        .user-message {
+            background-color: #e3f2fd;
+            margin-left: auto;
+            text-align: right;
+        }
+        .ai-message {
+            background-color: #f1f1f1;
+            margin-right: auto;
+        }
+        .input-container {
+            display: flex;
+            gap: 10px;
+        }
+        #user-input {
+            flex: 1;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 16px;
+        }
+        button {
+            padding: 10px 20px;
+            background-color: #4caf50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        .status {
+            text-align: center;
+            margin-top: 10px;
+            color: #666;
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>ESP32 AI Chat</h1>
+        <div class="chat-container" id="chat-container">
+            <div class="message ai-message">
+                你好！有什么我可以帮助你的吗？
+            </div>
+        </div>
+        <div class="input-container">
+            <input type="text" id="user-input" placeholder="输入你的问题...">
+            <button onclick="sendMessage()">发送</button>
+        </div>
+        <div class="status" id="status"></div>
+    </div>
+
+    <script>
+        // 添加事件监听器，使用户可以按Enter键发送消息
+        document.getElementById("user-input").addEventListener("keyup", function(event) {
+            if (event.key === "Enter") {
+                sendMessage();
+            }
+        });
+
+        function sendMessage() {
+            const userInput = document.getElementById("user-input");
+            const message = userInput.value.trim();
+            
+            if (message === "") return;
+            
+            // 添加用户消息到聊天窗口
+            addMessage(message, "user");
+            
+            // 清空输入框
+            userInput.value = "";
+            
+            // 显示状态
+            document.getElementById("status").innerText = "AI正在思考...";
+            
+            // 发送请求到ESP32
+            fetch("/chat", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({ message: message })
+            })
+            .then(response => response.json())
+            .then(data => {
+                // 添加AI回复到聊天窗口
+                addMessage(data.response, "ai");
+                document.getElementById("status").innerText = "";
+            })
+            .catch(error => {
+                console.error("Error:", error);
+                document.getElementById("status").innerText = "发生错误，请重试";
+            });
+        }
+
+        function addMessage(text, sender) {
+            const chatContainer = document.getElementById("chat-container");
+            const messageDiv = document.createElement("div");
+            
+            messageDiv.classList.add("message");
+            if (sender === "user") {
+                messageDiv.classList.add("user-message");
+            } else {
+                messageDiv.classList.add("ai-message");
+            }
+            
+            messageDiv.innerText = text;
+            chatContainer.appendChild(messageDiv);
+            
+            // 滚动到底部
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+    </script>
+</body>
+</html>
