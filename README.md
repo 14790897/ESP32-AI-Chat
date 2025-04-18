@@ -1,6 +1,6 @@
 # ESP32 AI Chat
 
-一个基于ESP32的AI聊天程序，可以通过Web界面或串口与AI进行对话。
+一个基于ESP32C3的AI聊天程序，可以通过Web界面或串口与AI进行对话。
 
 ## 功能特点
 
@@ -25,7 +25,8 @@
 
 1. 克隆或下载本仓库
 2. 使用PlatformIO打开项目
-3. 在`include/config.h`文件中配置WiFi和API设置
+3. 在`include/secrets.h`文件中配置, 按照以下格式
+   
 4. 编译并上传代码到ESP32
 5. 上传文件系统镜像到ESP32
 
