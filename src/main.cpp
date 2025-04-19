@@ -5,6 +5,7 @@
 #include <WebServer.h>
 #include <FS.h>       // 通常需要先包含 FS.h
 #include <LittleFS.h> // 包含 LittleFS 库
+#include <Preferences.h> // 包含 NVS 库
 
 #include <ESPmDNS.h>
 #include "secrets.h" // 包含你的配置 (WiFi凭证, API密钥等)
@@ -16,6 +17,16 @@ WebServer server(WEB_SERVER_PORT);
 String userInput = "";
 boolean newInput = false;
 
+// Preferences object for NVS storage
+Preferences preferences;
+
+// Conversation history
+const int MAX_HISTORY_ITEMS = 10;        // Maximum number of conversation pairs to store
+const char *NVS_NAMESPACE = "aichat";    // Namespace for NVS storage
+const char *NVS_HISTORY_COUNT = "count"; // Key for history count
+const char *NVS_USER_PREFIX = "user_";   // Prefix for user message keys
+const char *NVS_AI_PREFIX = "ai_";       // Prefix for AI response keys
+
 // Function declarations
 void setupWiFi();
 void setupMDNS();
@@ -23,9 +34,16 @@ void setupWebServer();
 void handleRoot();
 void handleNotFound();
 void handleChat();
+void handleClearHistory(); // New function to clear history
 String callOpenAI(String message);
 bool initFileSystem();
 String cleanResponse(String input);
+
+// NVS functions
+bool initNVS();
+void saveConversation(String userMessage, String aiResponse);
+String getConversationHistory();
+void clearConversationHistory();
 
 void setup()
 {
@@ -50,6 +68,13 @@ void setup()
     {
       delay(1000);
     } // Halt execution
+  }
+
+  // Initialize NVS
+  if (!initNVS())
+  {
+    Serial.println("NVS initialization failed! Continuing without conversation history.");
+    // We don't halt execution here, just continue without conversation history
   }
 
   // Setup WiFi (AP or Station mode)
@@ -383,9 +408,15 @@ void handleChat()
   // Call OpenAI API
   String aiResponse = callOpenAI(message);
 
+  // Save conversation to NVS
+  saveConversation(message, aiResponse);
+
   // Create JSON response
   DynamicJsonDocument responseDoc(4096); // Ensure this size is adequate for expected responses
   responseDoc["response"] = aiResponse;
+
+  // Add conversation history to response
+  responseDoc["history"] = getConversationHistory();
 
   String jsonResponse;
   serializeJson(responseDoc, jsonResponse);
@@ -407,6 +438,10 @@ void setupWebServer()
   server.on("/chat", HTTP_POST, handleChat);
   Serial.println("Route configured: POST /chat");
 
+  // Route to clear conversation history
+  server.on("/clear-history", HTTP_POST, handleClearHistory);
+  Serial.println("Route configured: POST /clear-history");
+
   // Set up 404 handler
   server.onNotFound(handleNotFound);
   Serial.println("404 handler configured");
@@ -420,6 +455,126 @@ void setupWebServer()
   Serial.println("Web server setup completed");
 }
 
+// Handle clear history request
+void handleClearHistory()
+{
+  clearConversationHistory();
+  server.send(200, "application/json", "{\"success\":true}");
+}
+
+// Initialize NVS
+bool initNVS()
+{
+  Serial.println("Initializing NVS...");
+  if (!preferences.begin(NVS_NAMESPACE, false))
+  {
+    Serial.println("ERROR: Failed to initialize NVS");
+    return false;
+  }
+  Serial.println("SUCCESS: NVS initialized");
+  return true;
+}
+
+// Save conversation to NVS
+void saveConversation(String userMessage, String aiResponse)
+{
+  // Get current count
+  int count = preferences.getInt(NVS_HISTORY_COUNT, 0);
+
+  // If we've reached the maximum, remove the oldest entry
+  if (count >= MAX_HISTORY_ITEMS)
+  {
+    // Shift all entries down by one
+    for (int i = 0; i < MAX_HISTORY_ITEMS - 1; i++)
+    {
+      String userKey = String(NVS_USER_PREFIX) + String(i);
+      String aiKey = String(NVS_AI_PREFIX) + String(i);
+      String nextUserKey = String(NVS_USER_PREFIX) + String(i + 1);
+      String nextAiKey = String(NVS_AI_PREFIX) + String(i + 1);
+
+      String nextUserMsg = preferences.getString(nextUserKey.c_str(), "");
+      String nextAiMsg = preferences.getString(nextAiKey.c_str(), "");
+
+      preferences.putString(userKey.c_str(), nextUserMsg);
+      preferences.putString(aiKey.c_str(), nextAiMsg);
+    }
+
+    // Add new entry at the end
+    String lastUserKey = String(NVS_USER_PREFIX) + String(MAX_HISTORY_ITEMS - 1);
+    String lastAiKey = String(NVS_AI_PREFIX) + String(MAX_HISTORY_ITEMS - 1);
+
+    preferences.putString(lastUserKey.c_str(), userMessage);
+    preferences.putString(lastAiKey.c_str(), aiResponse);
+  }
+  else
+  {
+    // Add new entry
+    String userKey = String(NVS_USER_PREFIX) + String(count);
+    String aiKey = String(NVS_AI_PREFIX) + String(count);
+
+    preferences.putString(userKey.c_str(), userMessage);
+    preferences.putString(aiKey.c_str(), aiResponse);
+
+    // Update count
+    preferences.putInt(NVS_HISTORY_COUNT, count + 1);
+  }
+}
+
+// Get conversation history as JSON string
+String getConversationHistory()
+{
+  int count = preferences.getInt(NVS_HISTORY_COUNT, 0);
+
+  // Create JSON array
+  DynamicJsonDocument doc(8192); // Adjust size as needed
+  JsonArray historyArray = doc.to<JsonArray>();
+
+  // Add each conversation pair
+  for (int i = 0; i < count; i++)
+  {
+    String userKey = String(NVS_USER_PREFIX) + String(i);
+    String aiKey = String(NVS_AI_PREFIX) + String(i);
+
+    String userMsg = preferences.getString(userKey.c_str(), "");
+    String aiMsg = preferences.getString(aiKey.c_str(), "");
+
+    if (userMsg.length() > 0 || aiMsg.length() > 0)
+    {
+      JsonObject entry = historyArray.createNestedObject();
+      entry["user"] = userMsg;
+      entry["ai"] = aiMsg;
+    }
+  }
+
+  String result;
+  serializeJson(historyArray, result);
+  return result;
+}
+
+// Clear conversation history
+void clearConversationHistory()
+{
+  Serial.println("Clearing conversation history...");
+
+  // Get current count
+  int count = preferences.getInt(NVS_HISTORY_COUNT, 0);
+
+  // Clear all entries
+  for (int i = 0; i < count; i++)
+  {
+    String userKey = String(NVS_USER_PREFIX) + String(i);
+    String aiKey = String(NVS_AI_PREFIX) + String(i);
+
+    preferences.remove(userKey.c_str());
+    preferences.remove(aiKey.c_str());
+  }
+
+  // Reset count
+  preferences.putInt(NVS_HISTORY_COUNT, 0);
+
+  Serial.println("Conversation history cleared");
+}
+
 // Helper function to clean up OpenAI API response
 String cleanResponse(String input) {
   // Find the first '{' character which indicates the start of JSON
@@ -427,13 +582,13 @@ String cleanResponse(String input) {
   if (jsonStart == -1) {
     return ""; // No JSON found
   }
-  
+
   // Find the last '}' character which indicates the end of JSON
   int jsonEnd = input.lastIndexOf('}');
   if (jsonEnd == -1) {
     return ""; // No JSON end found
   }
-  
+
   // Extract the JSON portion
   return input.substring(jsonStart, jsonEnd + 1);
 }
@@ -549,7 +704,7 @@ String callOpenAI(String message)
   Serial.println("Raw response body: ");
   Serial.println(responseBody);
   Serial.println("--------------------");
-  
+
   // Clean the response to get valid JSON
   String cleanedResponse = cleanResponse(responseBody);
   Serial.println("Cleaned response: ");
