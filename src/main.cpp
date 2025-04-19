@@ -401,7 +401,20 @@ void handleChat()
 
   if (message.length() == 0)
   {
-    server.send(400, "application/json", "{\"error\":\"Empty message\"}");
+    // 如果消息为空，只返回历史记录而不调用API
+    String history = getConversationHistory();
+    Serial.println("Returning history: " + history);
+
+    DynamicJsonDocument responseDoc(8192);
+    responseDoc["history"] = history;
+
+    String jsonResponse;
+    serializeJson(responseDoc, jsonResponse);
+
+    Serial.println("History response: " + jsonResponse);
+
+    // 发送响应
+    server.send(200, "application/json", jsonResponse);
     return;
   }
 
