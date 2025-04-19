@@ -72,32 +72,40 @@
 ```
 
 4. 编译并上传代码到ESP32：
-   ```bash
-   pio run --target upload
-   ```
+   - 使用快捷键：`Ctrl+Alt+U`
+   - 或使用命令行：
+     ```bash
+     pio run --target upload
+     ```
 
 5. 上传文件系统镜像到ESP32：
-   ```bash
-   pio run --target uploadfs
-   ```
+   - 使用PlatformIO侧边栏中的"Upload Filesystem Image"任务
+   - 或使用命令行：
+     ```bash
+     pio run --target uploadfs
+     ```
 
 ## 上传文件系统镜像
 
 上传文件系统镜像是必要的步骤，否则Web界面将无法正常工作。有以下几种方法可以上传文件系统镜像：
 
-### 方法1：使用PlatformIO界面
+### 方法1：使用快捷键
+
+在PlatformIO环境中，使用快捷键 `Ctrl+Alt+S` 可以直接上传文件系统镜像到ESP32设备。
+
+### 方法2：使用PlatformIO界面
 
 1. 在PlatformIO侧边栏中，展开您的项目
 2. 点击"Platform"
 3. 找到并点击"Upload Filesystem Image"任务
 
-### 方法2：使用命令行
+### 方法3：使用命令行
 
 ```bash
 pio run --target uploadfs
 ```
 
-### 方法3：使用自定义任务
+### 方法4：使用自定义任务
 
 1. 在PlatformIO侧边栏中，展开您的项目
 2. 点击"Custom"
@@ -184,6 +192,12 @@ Web界面会根据系统设置自动切换深色/浅色模式，提供更好的�
 - 检查串口监视器中的调试输出
 - 如果问题仍然存在，可以尝试清除历史记录
 
+### API调用超时
+
+- 如果遇到"ERROR: Client Timeout waiting for OpenAI response!"错误，请检查网络连接
+- 确保您的WiFi信号强度足够
+- 如果问题持续存在，可以尝试减少发送的历史记录数量
+
 ## 贡献
 
 欢迎提交问题报告和功能请求。如果您想贡献代码，请提交Pull Request。
@@ -202,3 +216,7 @@ MIT
 - `include/secrets.h` - 配置文件
 - `/data/index.html` - 主Web界面
 - `/data/fallback.html` - 备用Web界面（当主界面不可用时使用）
+
+
+## 参考文章
+extra_scripts使用方法: https://dokk.org/documentation/platformio/v3.6.4/projectconf/advanced_scripting/
