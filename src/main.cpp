@@ -639,7 +639,7 @@ String cleanResponse(String input)
 String callOpenAI(String message)
 {
   // Create JSON payload
-  DynamicJsonDocument doc(4096); // Increased size to accommodate conversation history
+  DynamicJsonDocument doc(8192); // Increased size to accommodate conversation history
   doc["model"] = API_MODEL;
 
   JsonArray messages = doc.createNestedArray("messages");
@@ -695,16 +695,40 @@ String callOpenAI(String message)
   request += "Connection: close\r\n\r\n";
   request += jsonPayload;
 
+  // Log request details (excluding Authorization header for security)
+  Serial.println("\n===== REQUEST DETAILS =====");
+  Serial.println("POST /v1/chat/completions HTTP/1.1");
+  Serial.println("Host: " + String(API_SERVER));
+  Serial.println("Content-Type: application/json");
+  Serial.println("Authorization: Bearer [API_KEY_HIDDEN]");
+  Serial.println("Content-Length: " + String(jsonPayload.length()));
+  Serial.println("Connection: close");
+  Serial.println("\n----- REQUEST PAYLOAD -----");
+  Serial.println(jsonPayload);
+  Serial.println("===========================\n");
+
   // Send the request
   client.print(request);
   Serial.println("OpenAI request sent!");
 
   // Wait for response with timeout
   unsigned long timeout = millis();
+  unsigned long lastDebugTime = millis();
+  Serial.println("Waiting for OpenAI response...");
+
   while (client.available() == 0)
   {
-    if (millis() - timeout > 15000)
-    { // Increased timeout to 15 seconds
+    // Print a waiting message every 5 seconds for debugging
+    if (millis() - lastDebugTime > 5000)
+    {
+      Serial.print("Still waiting for response... ");
+      Serial.print((millis() - timeout) / 1000);
+      Serial.println(" seconds elapsed");
+      lastDebugTime = millis();
+    }
+
+    if (millis() - timeout > 60000)
+    { // Increased timeout to 60 seconds
       Serial.println("ERROR: Client Timeout waiting for OpenAI response!");
       client.stop();
       return "Error: AI service response timeout."; // Return descriptive error
@@ -712,24 +736,36 @@ String callOpenAI(String message)
     delay(10); // Small delay while waiting
   }
 
-  // Read HTTP status line (optional but good for debugging)
+  Serial.print("Response received after ");
+  Serial.print((millis() - timeout) / 1000);
+  Serial.println(" seconds");
+
+  // Read HTTP status line
   String statusLine = client.readStringUntil('\n');
   Serial.print("HTTP Status: ");
   Serial.println(statusLine);
 
+  Serial.println("\n===== RESPONSE HEADERS =====");
+  Serial.println(statusLine);
+
   // Read headers and find end of headers
+  String allHeaders = "";
   while (client.available())
   {
     String line = client.readStringUntil('\n');
+    allHeaders += line + "\n";
+
+    // Print each header for debugging
+    Serial.println(line);
+
     if (line == "\r")
     {
       // Empty line indicates end of headers
       Serial.println("End of headers found.");
       break;
     }
-    // Optional: print headers for debugging
-    // Serial.print("Header: "); Serial.println(line);
   }
+  Serial.println("===========================\n");
 
   // Read the response body
   String responseBody = "";
@@ -742,8 +778,8 @@ String callOpenAI(String message)
     }
     delay(10); // Small delay
     // Add a safety break if something goes wrong with client state
-    if (millis() - timeout > 30000)
-    { // Total timeout for reading response (adjust as needed)
+    if (millis() - timeout > 90000)
+    { // Total timeout for reading response (increased to 90 seconds)
       Serial.println("ERROR: Timeout while reading response body.");
       break;
     }
@@ -754,19 +790,19 @@ String callOpenAI(String message)
   Serial.println("Connection closed.");
 
   // Debug response body
-  Serial.println("Raw response body: ");
+  Serial.println("\n===== RAW RESPONSE BODY =====");
   Serial.println(responseBody);
-  Serial.println("--------------------");
+  Serial.println("===========================\n");
 
   // Clean the response to get valid JSON
   String cleanedResponse = cleanResponse(responseBody);
-  Serial.println("Cleaned response: ");
+  Serial.println("\n===== CLEANED JSON RESPONSE =====");
   Serial.println(cleanedResponse);
-  Serial.println("--------------------");
+  Serial.println("===========================\n");
 
   // Parse JSON response
   // Increase size if necessary, check OpenAI typical response size
-  DynamicJsonDocument respDoc(4096);
+  DynamicJsonDocument respDoc(8192);
   DeserializationError error = deserializeJson(respDoc, cleanedResponse);
 
   if (error)
