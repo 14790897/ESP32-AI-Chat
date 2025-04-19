@@ -356,6 +356,15 @@
                 color: #b3d9ff;
             }
         }
+
+        .desktop-only {
+            display: none;
+        }
+        @media (min-width: 600px) {
+            .desktop-only {
+                display: flex !important;
+            }
+        }
     </style>
 </head>
 <body>
@@ -375,6 +384,14 @@
             </div>
             <div class="header-actions">
                 <!-- 预留空间，保持对称 -->
+                <button id="fullscreen-btn" class="icon-button desktop-only" title="全屏显示/退出全屏">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M8 3H5a2 2 0 0 0-2 2v3"></path>
+                        <path d="M16 3h3a2 2 0 0 1 2 2v3"></path>
+                        <path d="M8 21H5a2 2 0 0 1-2-2v-3"></path>
+                        <path d="M16 21h3a2 2 0 0 0 2-2v-3"></path>
+                    </svg>
+                </button>
             </div>
         </div>
         <div class="chat-container" id="chat-container">
@@ -592,6 +609,39 @@
                 addMessage("你好！我是AI助手，有什么我可以帮助你的吗？", "ai", false);
             });
         });
+
+        // 桌面端全屏按钮逻辑
+        function toggleFullscreen() {
+            if (
+                document.fullscreenElement ||
+                document.webkitFullscreenElement ||
+                document.mozFullScreenElement ||
+                document.msFullscreenElement
+            ) {
+                // 退出全屏
+                if (document.exitFullscreen) document.exitFullscreen();
+                else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+                else if (document.mozCancelFullScreen) document.mozCancelFullScreen();
+                else if (document.msExitFullscreen) document.msExitFullscreen();
+            } else {
+                // 进入全屏
+                const docEl = document.documentElement;
+                if (docEl.requestFullscreen) docEl.requestFullscreen();
+                else if (docEl.webkitRequestFullscreen) docEl.webkitRequestFullscreen();
+                else if (docEl.mozRequestFullScreen) docEl.mozRequestFullScreen();
+                else if (docEl.msRequestFullscreen) docEl.msRequestFullscreen();
+            }
+        }
+
+        // 只在桌面端显示全屏按钮
+        function setFullscreenBtnVisibility() {
+            const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+            const btn = document.getElementById("fullscreen-btn");
+            if (btn) btn.style.display = isMobile ? "none" : "flex";
+        }
+        setFullscreenBtnVisibility();
+
+        document.getElementById("fullscreen-btn").addEventListener("click", toggleFullscreen);
 
         function sendMessage() {
             const userInput = document.getElementById("user-input");
