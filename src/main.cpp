@@ -7,7 +7,7 @@
 #include <LittleFS.h> // 包含 LittleFS 库
 
 #include <ESPmDNS.h>
-#include "config.h" // 包含你的配置 (WiFi凭证, API密钥等)
+#include "secrets.h" // 包含你的配置 (WiFi凭证, API密钥等)
 
 // Create WebServer object on port 80
 WebServer server(WEB_SERVER_PORT);
