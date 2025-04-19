@@ -3,8 +3,8 @@
 #include <WiFiClientSecure.h>
 #include <ArduinoJson.h>
 #include <WebServer.h>
-#include <FS.h>       // 通常需要先包含 FS.h
-#include <LittleFS.h> // 包含 LittleFS 库
+#include <FS.h>          // 通常需要先包含 FS.h
+#include <LittleFS.h>    // 包含 LittleFS 库
 #include <Preferences.h> // 包含 NVS 库
 
 #include <ESPmDNS.h>
@@ -337,33 +337,17 @@ void handleRoot()
   }
   else
   {
-    Serial.println("ERROR: Failed to open index.html file");
-    Serial.println("Trying to load fallback.html...");
 
-    // Try to load fallback HTML file
-    // 使用 LittleFS (首字母大写) 对象
-    File fallbackFile = LittleFS.open("/fallback.html", "r");
-    if (fallbackFile)
-    {
-      Serial.println("SUCCESS: fallback.html file opened, streaming to client");
-      server.streamFile(fallbackFile, "text/html");
-      fallbackFile.close();
-      Serial.println("Fallback file sent and closed");
-    }
-    else
-    {
-      Serial.println("ERROR: Failed to open fallback.html file");
-      Serial.println("Sending basic error message");
+    Serial.println("Sending basic error message");
 
-      // Very simple fallback message if both files are missing
-      String basicHtml = "<html><head><title>ESP32 AI Chat</title></head><body>";
-      basicHtml += "<h1>ESP32 AI Chat</h1>";
-      basicHtml += "<p>Error: Interface files (index.html or fallback.html) not found in LittleFS.</p>";
-      basicHtml += "<p>Please upload the filesystem image containing the web files.</p>";
-      basicHtml += "</body></html>";
+    // Very simple fallback message if both files are missing
+    String basicHtml = "<html><head><title>ESP32 AI Chat</title></head><body>";
+    basicHtml += "<h1>ESP32 AI Chat</h1>";
+    basicHtml += "<p>Error: Interface files (index.html or fallback.html) not found in LittleFS.</p>";
+    basicHtml += "<p>Please upload the filesystem image containing the web files.</p>";
+    basicHtml += "</body></html>";
 
-      server.send(200, "text/html", basicHtml);
-    }
+    server.send(200, "text/html", basicHtml);
   }
 }
 
@@ -564,6 +548,48 @@ String getConversationHistory()
   return result;
 }
 
+// Get the last N conversation pairs for OpenAI context
+void getLastNConversations(JsonArray &messages, int n)
+{
+  int count = preferences.getInt(NVS_HISTORY_COUNT, 0);
+  int startIdx = max(0, count - n); // Get the last n conversations
+
+  Serial.print("Getting last ");
+  Serial.print(n);
+  Serial.print(" conversations, starting from index ");
+  Serial.println(startIdx);
+
+  // Add each conversation pair to the messages array
+  for (int i = startIdx; i < count; i++)
+  {
+    String userKey = String(NVS_USER_PREFIX) + String(i);
+    String aiKey = String(NVS_AI_PREFIX) + String(i);
+
+    String userMsg = preferences.getString(userKey.c_str(), "");
+    String aiMsg = preferences.getString(aiKey.c_str(), "");
+
+    if (userMsg.length() > 0)
+    {
+      JsonObject userMessage = messages.createNestedObject();
+      userMessage["role"] = "user";
+      userMessage["content"] = userMsg;
+
+      Serial.print("Added user message from history: ");
+      Serial.println(userMsg);
+    }
+
+    if (aiMsg.length() > 0)
+    {
+      JsonObject assistantMessage = messages.createNestedObject();
+      assistantMessage["role"] = "assistant";
+      assistantMessage["content"] = aiMsg;
+
+      Serial.print("Added assistant message from history: ");
+      Serial.println(aiMsg);
+    }
+  }
+}
+
 // Clear conversation history
 void clearConversationHistory()
 {
@@ -589,16 +615,19 @@ void clearConversationHistory()
 }
 
 // Helper function to clean up OpenAI API response
-String cleanResponse(String input) {
+String cleanResponse(String input)
+{
   // Find the first '{' character which indicates the start of JSON
   int jsonStart = input.indexOf('{');
-  if (jsonStart == -1) {
+  if (jsonStart == -1)
+  {
     return ""; // No JSON found
   }
 
   // Find the last '}' character which indicates the end of JSON
   int jsonEnd = input.lastIndexOf('}');
-  if (jsonEnd == -1) {
+  if (jsonEnd == -1)
+  {
     return ""; // No JSON end found
   }
 
@@ -610,7 +639,7 @@ String cleanResponse(String input) {
 String callOpenAI(String message)
 {
   // Create JSON payload
-  DynamicJsonDocument doc(1024); // Ensure this size is adequate
+  DynamicJsonDocument doc(4096); // Increased size to accommodate conversation history
   doc["model"] = API_MODEL;
 
   JsonArray messages = doc.createNestedArray("messages");
@@ -619,12 +648,23 @@ String callOpenAI(String message)
   systemMessage["role"] = "system";
   systemMessage["content"] = "You are a helpful assistant."; // Customize system prompt if needed
 
+  // Add the last 3 conversation pairs to provide context
+  getLastNConversations(messages, 3);
+
+  // Add the current user message
   JsonObject userMessage = messages.createNestedObject();
   userMessage["role"] = "user";
   userMessage["content"] = message;
 
+  Serial.println("Messages array with history:");
+  String messagesDebug;
+  serializeJson(messages, messagesDebug);
+  Serial.println(messagesDebug);
+
   String jsonPayload;
   serializeJson(doc, jsonPayload);
+
+  Serial.println("Full payload size (bytes): " + String(jsonPayload.length()));
 
   // Set up secure client
   WiFiClientSecure client;
@@ -735,7 +775,7 @@ String callOpenAI(String message)
     Serial.println(error.c_str());
     Serial.println("Failed to parse JSON response body.");
     Serial.println("Response body was: ");
-    Serial.println(cleanedResponse);                 // Print the problematic body
+    Serial.println(cleanedResponse);              // Print the problematic body
     return "Error: Could not parse AI response."; // Return descriptive error
   }
 
