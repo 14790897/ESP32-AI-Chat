@@ -676,14 +676,14 @@ String callOpenAI(String message)
   client.setInsecure();
   // ------------------------
 
-  Serial.println("Connecting to OpenAI server...");
+  Serial.println("Connecting to AI service...");
   if (!client.connect(API_SERVER, API_PORT))
   {
-    Serial.println("ERROR: Connection to OpenAI failed!");
+    Serial.println("ERROR: Connection to AI service failed!");
     return "Error: Could not connect to AI service."; // Return descriptive error
   }
 
-  Serial.println("Connected to OpenAI server!");
+  Serial.println("Connected to AI service!");
 
   // Prepare HTTP request
   String request = "POST /v1/chat/completions HTTP/1.1\r\n";
